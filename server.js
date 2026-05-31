@@ -8,22 +8,62 @@ app.use(express.json({
 }));
 
 // Health Check
-app.get('/', async (req, res) => {
+app.get('/', (req, res) => {
+  res.json({
+    status: 'running',
+    service: 'Aghaz Pakistan Screenshot Service',
+    node: process.version
+  });
+});
+
+// Browser Test Endpoint
+app.get('/test-browser', async (req, res) => {
+  let browser;
+
   try {
-    res.json({
-      status: 'running',
-      service: 'Aghaz Pakistan Screenshot Service',
-      node: process.version
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage'
+      ]
     });
-  } catch (err) {
+
+    const page = await browser.newPage();
+
+    await page.goto('https://example.com', {
+      waitUntil: 'networkidle0'
+    });
+
+    const title = await page.title();
+
+    await browser.close();
+
+    res.json({
+      success: true,
+      title,
+      message: 'Puppeteer is working'
+    });
+
+  } catch (error) {
+
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {}
+    }
+
     res.status(500).json({
-      error: err.message
+      success: false,
+      error: error.message
     });
   }
 });
 
 // Screenshot Endpoint
 app.post('/screenshot', async (req, res) => {
+
   const {
     html,
     width = 1080,
@@ -63,8 +103,7 @@ app.post('/screenshot', async (req, res) => {
     });
 
     const screenshot = await page.screenshot({
-      type: 'png',
-      fullPage: false
+      type: 'png'
     });
 
     await browser.close();
@@ -83,10 +122,8 @@ app.post('/screenshot', async (req, res) => {
     }
 
     return res.status(500).json({
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development'
-        ? error.stack
-        : undefined
+      success: false,
+      error: error.message
     });
   }
 });
