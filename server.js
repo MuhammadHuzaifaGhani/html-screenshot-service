@@ -1,11 +1,46 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
+const { execSync } = require('child_process');
+const fs = require('fs');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
+// Find Chrome executable automatically
+function findChrome() {
+  try {
+    // Try puppeteer's built-in path finder
+    const path = puppeteer.executablePath();
+    if (fs.existsSync(path)) return path;
+  } catch(e) {}
+
+  // Search common Render paths
+  const paths = [
+    '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome',
+    '/opt/render/.cache/puppeteer/chrome/linux-120.0.6099.109/chrome-linux64/chrome',
+    '/opt/render/.cache/puppeteer/chrome/linux-119.0.6045.105/chrome-linux64/chrome',
+  ];
+
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  // Search dynamically
+  try {
+    const result = execSync('find /opt/render/.cache/puppeteer -name "chrome" -type f 2>/dev/null').toString().trim();
+    if (result) return result.split('\n')[0];
+  } catch(e) {}
+
+  return null;
+}
+
 app.get('/', (req, res) => {
-  res.json({ status: 'running', service: 'Aghaz Pakistan Screenshot Service' });
+  const chromePath = findChrome();
+  res.json({ 
+    status: 'running', 
+    service: 'Aghaz Pakistan Screenshot Service',
+    chromePath: chromePath || 'not found'
+  });
 });
 
 app.post('/screenshot', async (req, res) => {
@@ -15,12 +50,16 @@ app.post('/screenshot', async (req, res) => {
     return res.status(400).json({ error: 'html field is required' });
   }
 
+  const chromePath = findChrome();
+  if (!chromePath) {
+    return res.status(500).json({ error: 'Chrome not found. Run: npx puppeteer browsers install chrome' });
+  }
+
   let browser;
   try {
     browser = await puppeteer.launch({
       headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
-                '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome',
+      executablePath: chromePath,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
