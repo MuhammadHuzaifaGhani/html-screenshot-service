@@ -1,103 +1,98 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
-const { execSync } = require('child_process');
-const fs = require('fs');
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
 
-// Find Chrome executable automatically
-function findChrome() {
+app.use(express.json({
+  limit: '20mb'
+}));
+
+// Health Check
+app.get('/', async (req, res) => {
   try {
-    // Try puppeteer's built-in path finder
-    const path = puppeteer.executablePath();
-    if (fs.existsSync(path)) return path;
-  } catch(e) {}
-
-  // Search common Render paths
-  const paths = [
-    '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome',
-    '/opt/render/.cache/puppeteer/chrome/linux-120.0.6099.109/chrome-linux64/chrome',
-    '/opt/render/.cache/puppeteer/chrome/linux-119.0.6045.105/chrome-linux64/chrome',
-  ];
-
-  for (const p of paths) {
-    if (fs.existsSync(p)) return p;
+    res.json({
+      status: 'running',
+      service: 'Aghaz Pakistan Screenshot Service',
+      node: process.version
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: err.message
+    });
   }
-
-  // Search dynamically
-  try {
-    const result = execSync('find /opt/render/.cache/puppeteer -name "chrome" -type f 2>/dev/null').toString().trim();
-    if (result) return result.split('\n')[0];
-  } catch(e) {}
-
-  return null;
-}
-
-app.get('/', (req, res) => {
-  const chromePath = findChrome();
-  res.json({ 
-    status: 'running', 
-    service: 'Aghaz Pakistan Screenshot Service',
-    chromePath: chromePath || 'not found'
-  });
 });
 
+// Screenshot Endpoint
 app.post('/screenshot', async (req, res) => {
-  const { html, width = 1080, height = 1350 } = req.body;
+  const {
+    html,
+    width = 1080,
+    height = 1350
+  } = req.body;
 
   if (!html) {
-    return res.status(400).json({ error: 'html field is required' });
-  }
-
-  const chromePath = findChrome();
-  if (!chromePath) {
-    return res.status(500).json({ error: 'Chrome not found. Run: npx puppeteer browsers install chrome' });
+    return res.status(400).json({
+      error: 'html field is required'
+    });
   }
 
   let browser;
+
   try {
+
     browser = await puppeteer.launch({
-      headless: 'new',
-      executablePath: chromePath,
+      headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
+        '--disable-dev-shm-usage'
       ]
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ 
-      width: parseInt(width), 
-      height: parseInt(height),
+
+    await page.setViewport({
+      width: Number(width),
+      height: Number(height),
       deviceScaleFactor: 1
     });
-    await page.setContent(html, { 
+
+    await page.setContent(html, {
       waitUntil: 'networkidle0',
       timeout: 30000
     });
-    await new Promise(resolve => setTimeout(resolve, 2000));
 
     const screenshot = await page.screenshot({
       type: 'png',
-      clip: { x: 0, y: 0, width: parseInt(width), height: parseInt(height) }
+      fullPage: false
     });
 
     await browser.close();
-    res.set('Content-Type', 'image/png');
-    res.send(screenshot);
+
+    res.setHeader('Content-Type', 'image/png');
+    return res.send(screenshot);
 
   } catch (error) {
-    if (browser) await browser.close();
-    res.status(500).json({ error: error.message });
+
+    console.error(error);
+
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {}
+    }
+
+    return res.status(500).json({
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development'
+        ? error.stack
+        : undefined
+    });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Running on port ${PORT}`));
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
