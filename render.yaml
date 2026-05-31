@@ -4,9 +4,5 @@ services:
     env: node
     plan: free
 
-    buildCommand: npm install && node install-chrome.js
+    buildCommand: npm install && npx puppeteer browsers install chrome
     startCommand: npm start
-
-    envVars:
-      - key: PUPPETEER_CACHE_DIR
-        value: /opt/render/.cache/puppeteer
