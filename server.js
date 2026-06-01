@@ -1,7 +1,6 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
-const { execSync } = require('child_process');
-const fs = require('fs');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 
 const app = express();
 
@@ -19,28 +18,24 @@ app.get('/', (req, res) => {
 });
 
 // Debug Route
-app.get('/debug', (req, res) => {
+app.get('/debug', async (req, res) => {
   try {
-    let chromeFiles = '';
 
-    try {
-      chromeFiles = execSync(
-        'find /opt/render/.cache/puppeteer -type f 2>/dev/null'
-      ).toString();
-    } catch (e) {
-      chromeFiles = 'No files found';
-    }
+    const executablePath = await chromium.executablePath();
 
     res.json({
-      cacheDir: process.env.PUPPETEER_CACHE_DIR || 'not set',
-      cacheExists: fs.existsSync('/opt/render/.cache/puppeteer'),
-      chromeFiles
+      chromiumPath: executablePath,
+      node: process.version,
+      chromiumVersion: chromium.version || 'unknown'
     });
 
-  } catch (err) {
+  } catch (error) {
+
     res.status(500).json({
-      error: err.message
+      success: false,
+      error: error.message
     });
+
   }
 });
 
@@ -52,12 +47,10 @@ app.get('/test-browser', async (req, res) => {
   try {
 
     browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage'
-      ]
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless
     });
 
     const page = await browser.newPage();
@@ -88,7 +81,9 @@ app.get('/test-browser', async (req, res) => {
       success: false,
       error: error.message
     });
+
   }
+
 });
 
 // Screenshot Endpoint
@@ -111,12 +106,10 @@ app.post('/screenshot', async (req, res) => {
   try {
 
     browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage'
-      ]
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless
     });
 
     const page = await browser.newPage();
@@ -155,7 +148,9 @@ app.post('/screenshot', async (req, res) => {
       success: false,
       error: error.message
     });
+
   }
+
 });
 
 const PORT = process.env.PORT || 3000;
