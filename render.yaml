@@ -4,5 +4,5 @@ services:
     env: node
     plan: free
 
-    buildCommand: npm install && npx puppeteer browsers install chrome
+    buildCommand: npm install
     startCommand: npm start
